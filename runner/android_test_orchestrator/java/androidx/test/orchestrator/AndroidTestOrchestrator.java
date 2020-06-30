@@ -55,6 +55,7 @@ import androidx.test.orchestrator.listeners.OrchestrationListenerManager;
 import androidx.test.orchestrator.listeners.OrchestrationResult;
 import androidx.test.orchestrator.listeners.OrchestrationResultPrinter;
 import androidx.test.orchestrator.listeners.OrchestrationXmlTestRunListener;
+import androidx.test.orchestrator.listeners.OrchestratorRetryHelper;
 import androidx.test.runner.UsageTrackerFacilitator;
 import androidx.test.services.shellexecutor.ClientNotConnected;
 import androidx.test.services.shellexecutor.ShellExecSharedConstants;
@@ -147,6 +148,7 @@ public final class AndroidTestOrchestrator extends android.app.Instrumentation
   private final OrchestrationResultPrinter resultPrinter = new OrchestrationResultPrinter();
   private final OrchestrationListenerManager listenerManager =
       new OrchestrationListenerManager(this);
+  private final OrchestratorRetryHelper retryHelper = new OrchestratorRetryHelper();
 
   private final ExecutorService executorService;
 
@@ -334,7 +336,8 @@ public final class AndroidTestOrchestrator extends android.app.Instrumentation
       finish(Activity.RESULT_OK, createResultBundle());
       return;
     }
-    test = testIterator.next();
+    test = retryHelper.isTestNeedsRetry(test)? test: testIterator.next();
+    Log.w(TAG, "Current test name " + test);
     listenerManager.testProcessStarted(new ParcelableDescription(test));
     String coveragePath = addTestCoverageSupport(arguments, test);
     if (coveragePath != null) {
@@ -418,6 +421,7 @@ public final class AndroidTestOrchestrator extends android.app.Instrumentation
     listenerManager.addListener(xmlTestRunListener);
     listenerManager.addListener(resultBuilder);
     listenerManager.addListener(resultPrinter);
+    listenerManager.addListener(retryHelper);
     listenerManager.orchestrationRunStarted(testSize);
   }
 
@@ -429,6 +433,7 @@ public final class AndroidTestOrchestrator extends android.app.Instrumentation
     try {
       resultBuilder.orchestrationRunFinished();
       resultPrinter.orchestrationRunFinished(writer, resultBuilder.build());
+      retryHelper.writeResults(writer);
     } finally {
       writer.close();
     }
